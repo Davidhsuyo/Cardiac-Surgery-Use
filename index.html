@@ -25,11 +25,6 @@
         .text-time-group { width: 130px !important; }
         .text-time-group input { background-color: #edf2f7; border: 1px solid #a0aec0; font-weight: bold; font-size: 13px; color: #4a5568; width: 100%; }
         
-        .fluid-group { width: 130px !important; }
-        .fluid-inputs { display: flex; gap: 4px; }
-        .fluid-inputs select { width: 60px; padding: 4px; font-size: 11px; }
-        .fluid-inputs input { width: 65px; }
-        
         .btn-panel { display: flex; gap: 10px; margin-left: auto; width: 100%; justify-content: flex-end; }
         .btn-add { background-color: #2b6cb0; color: white; border: none; border-radius: 4px; padding: 0 25px; font-weight: bold; cursor: pointer; height: 42px; font-size: 15px; }
         .btn-add:hover { background-color: #2c5282; }
@@ -198,22 +193,6 @@
             </div>
             
             <div style="display: flex; flex-wrap: wrap; gap: 8px; width: 100%; align-items: flex-end;">
-                <div class="input-group fluid-group">
-                    <label>Fluids</label>
-                    <div class="fluid-inputs">
-                        <select id="fluid-type">
-                            <option value="LRS">LRS</option>
-                            <option value="0.9% NaCl">0.9% NaCl</option>
-                            <option value="RS">RS</option>
-                            <option value="NS">NS</option>
-                            <option value="Blood">Blood</option>
-                            <option value="Plasma">Plasma</option>
-                            <option value="Other">Other</option>
-                        </select>
-                        <input type="number" id="fluids" placeholder="ml">
-                    </div>
-                </div>
-                
                 <div class="input-group"><label>Temp</label><input type="number" id="temp" step="0.1" placeholder="°C"></div>
             </div>
             
@@ -249,7 +228,39 @@
 
             <div class="plan-block" style="width: 100%; margin-top: 5px; margin-bottom: 0; border-color: #cbd5e0; box-shadow: none;">
                 <div class="plan-block-header" style="background-color: #2b6cb0;">
-                    <span>💧 CRI藥物</span>
+                    <span>💉 輸液 (Fluids)</span>
+                    <div>
+                        <select class="drug-selector fluid-selector" onchange="addIntraopFluidInput(this)" style="font-weight:normal; font-size: 11px;">
+                            <option value="">+ 選擇輸液...</option>
+                            <option value="LRS">LRS</option>
+                            <option value="0.9% NaCl">0.9% NaCl</option>
+                            <option value="RS">RS</option>
+                            <option value="NS">NS</option>
+                            <option value="Blood">Blood</option>
+                            <option value="Plasma">Plasma</option>
+                            <option value="Other">Other</option>
+                            <option value="CUSTOM">自訂輸液 (Custom)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="plan-block-body">
+                    <table class="med-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">Fluid Type</th>
+                                <th style="width: 20%;">Time</th>
+                                <th style="width: 35%;">Rate</th>
+                                <th style="width: 5%;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-intraop-fluid"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="plan-block" style="width: 100%; margin-top: 5px; margin-bottom: 0; border-color: #cbd5e0; box-shadow: none;">
+                <div class="plan-block-header" style="background-color: #2b6cb0;">
+                    <span>💉 CRI藥物</span>
                     <div>
                         <select class="drug-selector cri-selector" onchange="addIntraopCRIInput(this)" style="font-weight:normal; font-size: 11px;">
                             <option value="">+ 選擇給藥...</option>
@@ -664,6 +675,7 @@ let charts = [];
 let timeInputEdited = false;
 let maxVisiblePage = 1;
 let globalCRIDrugs = []; // 儲存全域所有添加過的CRI名稱
+let globalFluids = []; // 儲存全域所有添加過的Fluids名稱
 
 const topRowDefs = [
     { id: 'row-time', name: 'Time', bg: '#e2e8f0' },
@@ -683,7 +695,6 @@ const topRowDefs = [
 
 const bottomRowDefs = [
     { id: 'row-time-bottom', name: 'Time', bg: '#e2e8f0' },
-    { id: 'row-fluids', name: 'Fluids' },
     { id: 'row-temp', name: 'Temp (°C)' }
 ];
 
@@ -692,7 +703,7 @@ function updateChartFromGrid(el) {
     const idParts = el.id.split('-');
     if (idParts.length < 3) return;
     const rowType = idParts[1]; 
-    const globalSlot = parseInt(idParts[2]);
+    const globalSlot = parseInt(idParts[idParts.length - 1]); // ID可能變長了，取最後一個數字為 globalSlot
 
     const targetPage = Math.floor(globalSlot / SLOTS_PER_PAGE) + 1;
     const localSlot = globalSlot % SLOTS_PER_PAGE;
@@ -748,10 +759,12 @@ function buildMultiPageGrids() {
             gridHTML += `</tr>`;
         });
         
+        // --- 合併的 Fluids 標題列 ---
+        gridHTML += `<tr><td colspan="${SLOTS_PER_PAGE + 1}" style="text-align:center; font-weight:bold; background-color:#edf2f7; border-top:2px solid #000; border-bottom:2px solid #000; height:18px;">Fluids</td></tr>`;
+        gridHTML += `<tbody id="fluid-grid-tbody-${p}"></tbody>`;
+
         // --- 合併的 CRI 標題列 ---
         gridHTML += `<tr><td colspan="${SLOTS_PER_PAGE + 1}" style="text-align:center; font-weight:bold; background-color:#edf2f7; border-top:2px solid #000; border-bottom:2px solid #000; height:18px;">CRI</td></tr>`;
-        
-        // --- 動態生成 CRI 行的專屬 tbody ---
         gridHTML += `<tbody id="cri-grid-tbody-${p}"></tbody>`;
 
         gridHTML += `</table>`;
@@ -802,6 +815,29 @@ function ensureCRIRowExists(drugName) {
             for(let i = 0; i < SLOTS_PER_PAGE; i++) {
                 let slotIndex = (p-1) * SLOTS_PER_PAGE + i;
                 html += `<td class="data-cell" id="row-cri-dyn-${index}-${slotIndex}" contenteditable="true"></td>`;
+            }
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+        }
+    }
+    return index;
+}
+
+// 動態確保 Fluid 列出現在所有的網格表格中
+function ensureFluidRowExists(fluidName) {
+    let index = globalFluids.indexOf(fluidName);
+    if (index === -1) {
+        globalFluids.push(fluidName);
+        index = globalFluids.length - 1;
+        
+        // 推送到所有分頁中建立橫列
+        for (let p = 1; p <= TOTAL_PAGES; p++) {
+            const tbody = document.getElementById(`fluid-grid-tbody-${p}`);
+            let tr = document.createElement('tr');
+            let html = `<td class="row-header" style="font-size:10px; overflow:hidden;">${fluidName}</td>`;
+            for(let i = 0; i < SLOTS_PER_PAGE; i++) {
+                let slotIndex = (p-1) * SLOTS_PER_PAGE + i;
+                html += `<td class="data-cell" id="row-fluid-dyn-${index}-${slotIndex}" contenteditable="true"></td>`;
             }
             tr.innerHTML = html;
             tbody.appendChild(tr);
@@ -931,7 +967,7 @@ function toggleLine(dsIndex, btn) {
 }
 
 window.onload = function() {
-    document.querySelectorAll('.drug-selector:not(.cri-selector)').forEach(sel => sel.innerHTML = regularOptionsHTML);
+    document.querySelectorAll('.drug-selector:not(.cri-selector):not(.fluid-selector)').forEach(sel => sel.innerHTML = regularOptionsHTML);
     document.querySelectorAll('.cri-selector').forEach(sel => sel.innerHTML = criOptionsHTML);
     
     buildMultiPageGrids();
@@ -998,38 +1034,119 @@ function addTimeComment(eventLabel, timeVal) {
     autoResize(commentBox); // 更新高度
 }
 
-function addRecord() {
-    if (currentGlobalSlot >= TOTAL_PAGES * SLOTS_PER_PAGE) { alert('表單已完全滿載 (240格)！'); return; }
+// 核心時間排序平移演算法：將目標區間內所有的網格與圖表節點向右平移一格
+function shiftDataRight(startIndex, endIndex) {
+    const allRowPrefixes = [
+        'row-time', 'row-anes', 'row-o2', 'row-spo2', 'row-etco2', 'row-peak', 'row-tv', 'row-rr',
+        'row-pulse', 'row-cvp', 'row-sysbp', 'row-diabp', 'row-meanbp', 'row-time-bottom', 'row-temp'
+    ];
+    
+    // 從後面開始向右推移
+    for (let i = endIndex - 1; i >= startIndex; i--) {
+        // 移動所有固定項目
+        allRowPrefixes.forEach(prefix => {
+            const cellPrev = document.getElementById(`${prefix}-${i}`);
+            const cellNext = document.getElementById(`${prefix}-${i + 1}`);
+            if (cellPrev && cellNext) cellNext.textContent = cellPrev.textContent;
+        });
+        
+        // 移動動態 Fluids 項目
+        globalFluids.forEach((d, idx) => {
+            const cellPrev = document.getElementById(`row-fluid-dyn-${idx}-${i}`);
+            const cellNext = document.getElementById(`row-fluid-dyn-${idx}-${i + 1}`);
+            if (cellPrev && cellNext) cellNext.textContent = cellPrev.textContent;
+        });
+        
+        // 移動動態 CRI 項目
+        globalCRIDrugs.forEach((d, idx) => {
+            const cellPrev = document.getElementById(`row-cri-dyn-${idx}-${i}`);
+            const cellNext = document.getElementById(`row-cri-dyn-${idx}-${i + 1}`);
+            if (cellPrev && cellNext) cellNext.textContent = cellPrev.textContent;
+        });
+        
+        // 移動圖表節點
+        const pagePrev = Math.floor(i / SLOTS_PER_PAGE) + 1;
+        const localPrev = i % SLOTS_PER_PAGE;
+        const pageNext = Math.floor((i + 1) / SLOTS_PER_PAGE) + 1;
+        const localNext = (i + 1) % SLOTS_PER_PAGE;
+        
+        const chartPrev = charts[pagePrev - 1];
+        const chartNext = charts[pageNext - 1];
+        
+        for(let ds = 0; ds < 10; ds++) {
+            chartNext.data.datasets[ds].data[localNext] = chartPrev.data.datasets[ds].data[localPrev];
+        }
+        chartNext.data.bolusNames[localNext] = chartPrev.data.bolusNames[localPrev];
+    }
+    
+    // 清空目標插入位置的值以迎接新資料
+    allRowPrefixes.forEach(prefix => {
+        const cell = document.getElementById(`${prefix}-${startIndex}`);
+        if (cell) cell.textContent = '';
+    });
+    globalFluids.forEach((d, idx) => {
+        const cell = document.getElementById(`row-fluid-dyn-${idx}-${startIndex}`);
+        if (cell) cell.textContent = '';
+    });
+    globalCRIDrugs.forEach((d, idx) => {
+        const cell = document.getElementById(`row-cri-dyn-${idx}-${startIndex}`);
+        if (cell) cell.textContent = '';
+    });
+    
+    const targetPage = Math.floor(startIndex / SLOTS_PER_PAGE) + 1;
+    const targetLocal = startIndex % SLOTS_PER_PAGE;
+    for(let ds = 0; ds < 10; ds++) {
+        charts[targetPage - 1].data.datasets[ds].data[targetLocal] = null;
+    }
+    charts[targetPage - 1].data.bolusNames[targetLocal] = '';
+    
+    // 強制重繪全部圖表
+    charts.forEach(c => c.update());
+}
 
+function addRecord() {
     const timeStr = document.getElementById('record-time').value;
     if(!timeStr) { alert('請輸入紀錄時間！'); return; }
 
-    // 尋找是否已經有相同時間的紀錄
+    // 尋找是否已經有相同時間的紀錄，或是該插入在哪個時間點以保持排序
     let targetGlobalSlot = currentGlobalSlot;
     let isOverwrite = false;
     for (let i = 0; i < currentGlobalSlot; i++) {
-        if (document.getElementById(`row-time-${i}`).textContent === timeStr) {
+        let slotTime = document.getElementById(`row-time-${i}`).textContent;
+        if (slotTime === timeStr) {
             targetGlobalSlot = i;
             isOverwrite = true;
             break;
+        } else if (slotTime > timeStr) {
+            targetGlobalSlot = i;
+            break; // 找到比現在輸入的時間還大的，就是插入點
         }
     }
 
-    let targetPage = Math.floor(targetGlobalSlot / SLOTS_PER_PAGE) + 1;
-    
-    while (targetPage > maxVisiblePage && maxVisiblePage < TOTAL_PAGES) {
+    if (!isOverwrite && currentGlobalSlot >= TOTAL_PAGES * SLOTS_PER_PAGE) {
+        alert('表單已完全滿載 (240格)！無法新增新時間段。');
+        return;
+    }
+
+    // 檢查插入後的格數是否會超越現有分頁數
+    let maxNeededPage = Math.floor(currentGlobalSlot / SLOTS_PER_PAGE) + 1;
+    while (maxNeededPage > maxVisiblePage && maxVisiblePage < TOTAL_PAGES) {
         addNewPage(false);
     }
     
+    // 執行資料平移 (Time Sorting)
+    if (!isOverwrite && targetGlobalSlot < currentGlobalSlot) {
+        shiftDataRight(targetGlobalSlot, currentGlobalSlot);
+    }
+
+    let targetPage = Math.floor(targetGlobalSlot / SLOTS_PER_PAGE) + 1;
     let localSlot = targetGlobalSlot % SLOTS_PER_PAGE;
     switchPage(targetPage);
 
     document.getElementById(`row-time-${targetGlobalSlot}`).textContent = timeStr;
     document.getElementById(`row-time-bottom-${targetGlobalSlot}`).textContent = timeStr;
 
-    // 定義更新文字的輔助函式：
-    // 如果是新紀錄(!isOverwrite)，空值就補 '-'；
-    // 如果是合併覆寫模式(isOverwrite)，只有當下輸入框「有值」才覆寫，若是空值就略過，保留原本表格內的數據。
+    // 定義更新文字的輔助函式：若是空值就略過或補 '-'。
     const updateText = (elId, inputId) => {
         const inputVal = document.getElementById(inputId).value;
         const el = document.getElementById(elId);
@@ -1056,16 +1173,6 @@ function addRecord() {
     
     updateText(`row-temp-${targetGlobalSlot}`, 'temp');
     
-    // Fluids 欄位特殊處理
-    const fluidType = document.getElementById('fluid-type').value;
-    const fluidAmt = document.getElementById('fluids').value;
-    const fluidCell = document.getElementById(`row-fluids-${targetGlobalSlot}`);
-    if (!isOverwrite) {
-        fluidCell.textContent = fluidAmt !== '' ? `${fluidType} ${fluidAmt}` : '-';
-    } else if (fluidAmt !== '') {
-        fluidCell.textContent = `${fluidType} ${fluidAmt}`;
-    }
-
     // Bolus 處理
     let bolusNameOnlyArray = [];
     const intraopRows = document.querySelectorAll('#tbody-intraop tr');
@@ -1093,6 +1200,26 @@ function addRecord() {
                 <td>${route}</td>
             `;
             document.getElementById(`bolus-tbody-${targetPage}`).appendChild(newTr);
+        }
+    });
+
+    // 動態 Fluids 處理
+    const fluidInputs = document.querySelectorAll('#tbody-intraop-fluid tr');
+    fluidInputs.forEach(row => {
+        const fName = row.querySelector('.r-fluid').value.trim();
+        const rate = row.querySelector('.r-rate').value.trim();
+        
+        if (fName) {
+            let index = ensureFluidRowExists(fName);
+            const cellId = `row-fluid-dyn-${index}-${targetGlobalSlot}`;
+            const cell = document.getElementById(cellId);
+            if (cell) {
+                if (!isOverwrite) {
+                    cell.textContent = rate !== '' ? rate : '-';
+                } else if (rate !== '') {
+                    cell.textContent = rate;
+                }
+            }
         }
     });
 
@@ -1149,9 +1276,8 @@ function addRecord() {
         currentGlobalSlot++;
     }
 
-    // 清空給藥與 CRI 區塊
+    // ★ 此處不再清空 Fluids 與 CRI 的輸入區塊，保留在畫面上
     document.getElementById('tbody-intraop').innerHTML = '';
-    document.getElementById('tbody-intraop-cri').innerHTML = '';
 
     timeInputEdited = false;
     const realNow = new Date();
@@ -1221,6 +1347,23 @@ function addIntraopBolus(selectElem) {
         <td style="width: 10%;"><input type="number" class="r-total calc-result" readonly tabindex="-1"></td>
         <td style="width: 10%;"><input type="number" class="r-amt calc-result" readonly tabindex="-1"></td>
         <td style="width: 15%;"><input type="text" class="r-route" placeholder="輸入途徑"></td>
+        <td style="width: 5%;"><button class="btn-del" onclick="this.closest('tr').remove();">×</button></td>
+    `;
+    tbody.appendChild(tr);
+    selectElem.value = ""; 
+}
+
+function addIntraopFluidInput(selectElem) {
+    const fluid = selectElem.value;
+    if (!fluid) return;
+    const tbody = document.getElementById('tbody-intraop-fluid');
+    const tr = document.createElement('tr');
+    let fName = fluid === 'CUSTOM' ? '' : fluid;
+    
+    tr.innerHTML = `
+        <td style="text-align: left; padding-left: 5px;"><input type="text" value="${fName}" class="r-fluid" placeholder="Fluid Type" style="text-align: left; font-weight:bold;"></td>
+        <td style="width: 20%;"><input type="time" class="r-time"></td>
+        <td style="width: 35%;"><input type="text" class="r-rate" placeholder="e.g. 10 ml/hr"></td>
         <td style="width: 5%;"><button class="btn-del" onclick="this.closest('tr').remove();">×</button></td>
     `;
     tbody.appendChild(tr);
@@ -1374,9 +1517,12 @@ function exportCSV() {
     }
 
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    let headers = ["Time", "Anesthetic", "O2 L/min", "SpO2 (%)", "ETCO2 (mmHg)", "Peak (cmH2O)", "TV (ml)", "RR (bpm)", "Pulse (bpm)", "CVP (mmHg)", "Sys BP (mmHg)", "Dia BP (mmHg)", "Mean BP (mmHg)", "Fluids", "Temp (°C)"];
+    let headers = ["Time", "Anesthetic", "O2 L/min", "SpO2 (%)", "ETCO2 (mmHg)", "Peak (cmH2O)", "TV (ml)", "RR (bpm)", "Pulse (bpm)", "CVP (mmHg)", "Sys BP (mmHg)", "Dia BP (mmHg)", "Mean BP (mmHg)", "Temp (°C)"];
     
-    // 將動態生成的 CRI 行加入到標題中
+    // 將動態生成的 Fluids/CRI 行加入到標題中
+    globalFluids.forEach(d => {
+        headers.push(`Fluid: ${d}`);
+    });
     globalCRIDrugs.forEach(d => {
         headers.push(`CRI: ${d}`);
     });
@@ -1398,10 +1544,15 @@ function exportCSV() {
             document.getElementById(`row-sysbp-${i}`).textContent,
             document.getElementById(`row-diabp-${i}`).textContent,
             document.getElementById(`row-meanbp-${i}`).textContent,
-            document.getElementById(`row-fluids-${i}`).textContent,
             document.getElementById(`row-temp-${i}`).textContent
         ];
         
+        // 推送各時段動態 Fluids 行的資料
+        globalFluids.forEach((d, idx) => {
+            const cell = document.getElementById(`row-fluid-dyn-${idx}-${i}`);
+            row.push(cell ? cell.textContent : "");
+        });
+
         // 推送各時段動態 CRI 行的資料
         globalCRIDrugs.forEach((d, idx) => {
             const cell = document.getElementById(`row-cri-dyn-${idx}-${i}`);
@@ -1427,6 +1578,7 @@ function saveToJSON() {
     const state = {
         globalSlot: currentGlobalSlot,
         maxPage: maxVisiblePage,
+        globalFluids: globalFluids,
         globalCRIDrugs: globalCRIDrugs,
         inputs: {},
         cells: {},
@@ -1484,11 +1636,17 @@ function loadFromJSON(event) {
             }
             currentGlobalSlot = state.globalSlot;
             
-            // 清空現有的動態 CRI 行並還原
+            // 清空現有的動態 Fluids/CRI 行並還原
+            globalFluids = [];
             globalCRIDrugs = [];
             for (let i = 1; i <= TOTAL_PAGES; i++) {
-                const tb = document.getElementById(`cri-grid-tbody-${i}`);
-                if(tb) tb.innerHTML = '';
+                const tbF = document.getElementById(`fluid-grid-tbody-${i}`);
+                if(tbF) tbF.innerHTML = '';
+                const tbC = document.getElementById(`cri-grid-tbody-${i}`);
+                if(tbC) tbC.innerHTML = '';
+            }
+            if (state.globalFluids) {
+                state.globalFluids.forEach(dName => ensureFluidRowExists(dName));
             }
             if (state.globalCRIDrugs) {
                 state.globalCRIDrugs.forEach(dName => ensureCRIRowExists(dName));
@@ -1509,7 +1667,7 @@ function loadFromJSON(event) {
                     
                     const idParts = id.split('-');
                     const rowType = idParts[1]; 
-                    const globalSlot = parseInt(idParts[2]);
+                    const globalSlot = parseInt(idParts[idParts.length - 1]);
                     const targetPage = Math.floor(globalSlot / SLOTS_PER_PAGE) + 1;
                     const localSlot = globalSlot % SLOTS_PER_PAGE;
                     const currentChart = charts[targetPage - 1];
