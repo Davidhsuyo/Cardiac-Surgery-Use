@@ -215,7 +215,6 @@
                 </div>
                 
                 <div class="input-group"><label>Temp</label><input type="number" id="temp" step="0.1" placeholder="°C"></div>
-                <div class="input-group cri-group" style="width: 120px;"><label>CRI</label><input type="text" id="cri" placeholder="e.g. D3 F2"></div>
             </div>
             
             <div class="plan-block" style="width: 100%; margin-top: 5px; margin-bottom: 0; border-color: #cbd5e0; box-shadow: none;">
@@ -244,6 +243,31 @@
                             </tr>
                         </thead>
                         <tbody id="tbody-intraop"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="plan-block" style="width: 100%; margin-top: 5px; margin-bottom: 0; border-color: #cbd5e0; box-shadow: none;">
+                <div class="plan-block-header" style="background-color: #2b6cb0;">
+                    <span>💧 CRI藥物</span>
+                    <div>
+                        <select class="drug-selector cri-selector" onchange="addIntraopCRIInput(this)" style="font-weight:normal; font-size: 11px;">
+                            <option value="">+ 選擇給藥...</option>
+                            <option value="CUSTOM">自訂藥物 (Custom)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="plan-block-body">
+                    <table class="med-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">Drug Name</th>
+                                <th style="width: 20%;">Time</th>
+                                <th style="width: 35%;">Rate</th>
+                                <th style="width: 5%;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-intraop-cri"></tbody>
                     </table>
                 </div>
             </div>
@@ -639,6 +663,7 @@ let currentGlobalSlot = 0;
 let charts = [];
 let timeInputEdited = false;
 let maxVisiblePage = 1;
+let globalCRIDrugs = []; // 儲存全域所有添加過的CRI名稱
 
 const topRowDefs = [
     { id: 'row-time', name: 'Time', bg: '#e2e8f0' },
@@ -659,11 +684,10 @@ const topRowDefs = [
 const bottomRowDefs = [
     { id: 'row-time-bottom', name: 'Time', bg: '#e2e8f0' },
     { id: 'row-fluids', name: 'Fluids' },
-    { id: 'row-temp', name: 'Temp (°C)' },
-    { id: 'row-cri', name: 'CRI', height: '25px', cellStyle: 'white-space: normal; padding: 2px;' }
+    { id: 'row-temp', name: 'Temp (°C)' }
 ];
 
-// 新增：處理網格內文字修改並即時連動圖表
+// 處理網格內文字修改並即時連動圖表
 function updateChartFromGrid(el) {
     const idParts = el.id.split('-');
     if (idParts.length < 3) return;
@@ -715,6 +739,7 @@ function buildMultiPageGrids() {
             gridHTML += `</tr>`;
         });
         gridHTML += `</table><div class="chart-wrapper"><canvas id="anesthesiaChart-${p}"></canvas></div><table class="record-table">`;
+        
         bottomRowDefs.forEach(r => {
             gridHTML += `<tr style="${r.height ? 'height:'+r.height+';' : ''}"><td class="row-header" style="${r.bg ? 'background-color:'+r.bg+';' : ''}">${r.name}</td>`;
             for(let i = 0; i < SLOTS_PER_PAGE; i++) {
@@ -722,6 +747,13 @@ function buildMultiPageGrids() {
             }
             gridHTML += `</tr>`;
         });
+        
+        // --- 合併的 CRI 標題列 ---
+        gridHTML += `<tr><td colspan="${SLOTS_PER_PAGE + 1}" style="text-align:center; font-weight:bold; background-color:#edf2f7; border-top:2px solid #000; border-bottom:2px solid #000; height:18px;">CRI</td></tr>`;
+        
+        // --- 動態生成 CRI 行的專屬 tbody ---
+        gridHTML += `<tbody id="cri-grid-tbody-${p}"></tbody>`;
+
         gridHTML += `</table>`;
         
         // 頁面獨立的 Comments 與 Bolus 區塊
@@ -753,6 +785,29 @@ function buildMultiPageGrids() {
         gridHTML += `</div>`;
     }
     wrapper.innerHTML = gridHTML;
+}
+
+// 動態確保 CRI 列出現在所有的網格表格中
+function ensureCRIRowExists(drugName) {
+    let index = globalCRIDrugs.indexOf(drugName);
+    if (index === -1) {
+        globalCRIDrugs.push(drugName);
+        index = globalCRIDrugs.length - 1;
+        
+        // 推送到所有分頁中建立橫列
+        for (let p = 1; p <= TOTAL_PAGES; p++) {
+            const tbody = document.getElementById(`cri-grid-tbody-${p}`);
+            let tr = document.createElement('tr');
+            let html = `<td class="row-header" style="font-size:10px; overflow:hidden;">${drugName}</td>`;
+            for(let i = 0; i < SLOTS_PER_PAGE; i++) {
+                let slotIndex = (p-1) * SLOTS_PER_PAGE + i;
+                html += `<td class="data-cell" id="row-cri-dyn-${index}-${slotIndex}" contenteditable="true"></td>`;
+            }
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+        }
+    }
+    return index;
 }
 
 // 建立 8 個獨立的 Chart 實例 
@@ -943,17 +998,6 @@ function addTimeComment(eventLabel, timeVal) {
     autoResize(commentBox); // 更新高度
 }
 
-function autoFitText(elementId) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-    let fontSize = 10;
-    el.style.fontSize = fontSize + 'px';
-    while (el.scrollHeight > el.clientHeight && fontSize > 6) {
-        fontSize -= 0.5;
-        el.style.fontSize = fontSize + 'px';
-    }
-}
-
 function addRecord() {
     if (currentGlobalSlot >= TOTAL_PAGES * SLOTS_PER_PAGE) { alert('表單已完全滿載 (240格)！'); return; }
 
@@ -1022,15 +1066,6 @@ function addRecord() {
         fluidCell.textContent = `${fluidType} ${fluidAmt}`;
     }
 
-    // CRI 特殊處理
-    const criElem = document.getElementById('cri');
-    const criCell = document.getElementById(`row-cri-${targetGlobalSlot}`);
-    if (!isOverwrite) {
-        criCell.textContent = (criElem && criElem.value) ? criElem.value : '-';
-    } else if (criElem && criElem.value !== '') {
-        criCell.textContent = criElem.value;
-    }
-
     // Bolus 處理
     let bolusNameOnlyArray = [];
     const intraopRows = document.querySelectorAll('#tbody-intraop tr');
@@ -1061,6 +1096,26 @@ function addRecord() {
         }
     });
 
+    // 動態 CRI 處理
+    const criInputs = document.querySelectorAll('#tbody-intraop-cri tr');
+    criInputs.forEach(row => {
+        const dName = row.querySelector('.r-drug').value.trim();
+        const rate = row.querySelector('.r-rate').value.trim();
+        
+        if (dName) {
+            let index = ensureCRIRowExists(dName);
+            const cellId = `row-cri-dyn-${index}-${targetGlobalSlot}`;
+            const cell = document.getElementById(cellId);
+            if (cell) {
+                if (!isOverwrite) {
+                    cell.textContent = rate !== '' ? rate : '-';
+                } else if (rate !== '') {
+                    cell.textContent = rate;
+                }
+            }
+        }
+    });
+
     // 圖表更新：直接讀取網格(DOM)上最終顯示的數字來畫圖，確保完美同步
     let currentChart = charts[targetPage - 1];
     const parseChartVal = (elId) => {
@@ -1088,15 +1143,15 @@ function addRecord() {
     }
     
     currentChart.update();
-    
-    autoFitText(`row-cri-${targetGlobalSlot}`);
 
     // 如果不是覆寫模式，全域格數加1
     if (!isOverwrite) {
         currentGlobalSlot++;
     }
 
+    // 清空給藥與 CRI 區塊
     document.getElementById('tbody-intraop').innerHTML = '';
+    document.getElementById('tbody-intraop-cri').innerHTML = '';
 
     timeInputEdited = false;
     const realNow = new Date();
@@ -1166,6 +1221,23 @@ function addIntraopBolus(selectElem) {
         <td style="width: 10%;"><input type="number" class="r-total calc-result" readonly tabindex="-1"></td>
         <td style="width: 10%;"><input type="number" class="r-amt calc-result" readonly tabindex="-1"></td>
         <td style="width: 15%;"><input type="text" class="r-route" placeholder="輸入途徑"></td>
+        <td style="width: 5%;"><button class="btn-del" onclick="this.closest('tr').remove();">×</button></td>
+    `;
+    tbody.appendChild(tr);
+    selectElem.value = ""; 
+}
+
+function addIntraopCRIInput(selectElem) {
+    const drug = selectElem.value;
+    if (!drug) return;
+    const tbody = document.getElementById('tbody-intraop-cri');
+    const tr = document.createElement('tr');
+    let dName = drug === 'CUSTOM' ? '' : drug;
+    
+    tr.innerHTML = `
+        <td style="text-align: left; padding-left: 5px;"><input type="text" value="${dName}" class="r-drug" placeholder="Drug Name" style="text-align: left; font-weight:bold;"></td>
+        <td style="width: 20%;"><input type="time" class="r-time"></td>
+        <td style="width: 35%;"><input type="text" class="r-rate" placeholder="e.g. 1 ml/hr"></td>
         <td style="width: 5%;"><button class="btn-del" onclick="this.closest('tr').remove();">×</button></td>
     `;
     tbody.appendChild(tr);
@@ -1302,7 +1374,13 @@ function exportCSV() {
     }
 
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    let headers = ["Time", "Anesthetic", "O2 L/min", "SpO2 (%)", "ETCO2 (mmHg)", "Peak (cmH2O)", "TV (ml)", "RR (bpm)", "Pulse (bpm)", "CVP (mmHg)", "Sys BP (mmHg)", "Dia BP (mmHg)", "Mean BP (mmHg)", "Fluids", "Temp (°C)", "CRI"];
+    let headers = ["Time", "Anesthetic", "O2 L/min", "SpO2 (%)", "ETCO2 (mmHg)", "Peak (cmH2O)", "TV (ml)", "RR (bpm)", "Pulse (bpm)", "CVP (mmHg)", "Sys BP (mmHg)", "Dia BP (mmHg)", "Mean BP (mmHg)", "Fluids", "Temp (°C)"];
+    
+    // 將動態生成的 CRI 行加入到標題中
+    globalCRIDrugs.forEach(d => {
+        headers.push(`CRI: ${d}`);
+    });
+    
     csvContent += headers.join(",") + "\n";
 
     for(let i = 0; i < currentGlobalSlot; i++) {
@@ -1321,9 +1399,15 @@ function exportCSV() {
             document.getElementById(`row-diabp-${i}`).textContent,
             document.getElementById(`row-meanbp-${i}`).textContent,
             document.getElementById(`row-fluids-${i}`).textContent,
-            document.getElementById(`row-temp-${i}`).textContent,
-            document.getElementById(`row-cri-${i}`).textContent
+            document.getElementById(`row-temp-${i}`).textContent
         ];
+        
+        // 推送各時段動態 CRI 行的資料
+        globalCRIDrugs.forEach((d, idx) => {
+            const cell = document.getElementById(`row-cri-dyn-${idx}-${i}`);
+            row.push(cell ? cell.textContent : "");
+        });
+
         let escapedRow = row.map(val => '"' + String(val).replace(/"/g, '""') + '"');
         csvContent += escapedRow.join(",") + "\n";
     }
@@ -1343,6 +1427,7 @@ function saveToJSON() {
     const state = {
         globalSlot: currentGlobalSlot,
         maxPage: maxVisiblePage,
+        globalCRIDrugs: globalCRIDrugs,
         inputs: {},
         cells: {},
         bolus: {},
@@ -1398,6 +1483,16 @@ function loadFromJSON(event) {
                 addNewPage(false);
             }
             currentGlobalSlot = state.globalSlot;
+            
+            // 清空現有的動態 CRI 行並還原
+            globalCRIDrugs = [];
+            for (let i = 1; i <= TOTAL_PAGES; i++) {
+                const tb = document.getElementById(`cri-grid-tbody-${i}`);
+                if(tb) tb.innerHTML = '';
+            }
+            if (state.globalCRIDrugs) {
+                state.globalCRIDrugs.forEach(dName => ensureCRIRowExists(dName));
+            }
 
             const formElements = document.querySelectorAll('.ucd-form-container input, .ucd-form-container select, .ucd-form-container textarea');
             formElements.forEach((el, index) => {
