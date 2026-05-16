@@ -191,6 +191,7 @@
                 <div style="width: 2px; background: #cbd5e0; margin: 0 5px; height: 35px; align-self: flex-end;"></div>
                 
                 <div class="input-group"><label>Pulse (•)</label><input type="number" id="pulse" placeholder="bpm"></div>
+                <div class="input-group"><label>CVP (mean)</label><input type="number" id="cvp" placeholder="mmHg"></div>
                 <div class="input-group"><label>Sys BP (V)</label><input type="number" id="sysBP" placeholder="mmHg"></div>
                 <div class="input-group"><label>Dia BP (^)</label><input type="number" id="diaBP" placeholder="mmHg"></div>
                 <div class="input-group"><label>Mean BP (x)</label><input type="number" id="meanBP" placeholder="mmHg"></div>
@@ -511,6 +512,7 @@
             <button class="line-toggle-btn" onclick="toggleLine(5, this)">ETCO2</button>
             <button class="line-toggle-btn" onclick="toggleLine(6, this)">RR</button>
             <button class="line-toggle-btn" onclick="toggleLine(7, this)">Temp</button>
+            <button class="line-toggle-btn" onclick="toggleLine(8, this)">CVP</button>
         </div>
         
         <div id="grids-wrapper" style="width: 100%;"></div>
@@ -648,6 +650,7 @@ const topRowDefs = [
     { id: 'row-tv', name: 'TV' },
     { id: 'row-rr', name: 'RR' },
     { id: 'row-pulse', name: 'Pulse' },
+    { id: 'row-cvp', name: 'CVP (Mean)' },
     { id: 'row-sysbp', name: 'Sys BP' },
     { id: 'row-diabp', name: 'Dia BP' },
     { id: 'row-meanbp', name: 'Mean BP' }
@@ -685,6 +688,7 @@ function updateChartFromGrid(el) {
         case 'etco2': dsIndex = 5; break;
         case 'rr': dsIndex = 6; break;
         case 'temp': dsIndex = 7; break;
+        case 'cvp': dsIndex = 8; break;
     }
 
     if (dsIndex !== -1) {
@@ -770,6 +774,7 @@ function initCharts() {
                     { label: 'ETCO2', data: emptyData(), borderColor: '#38a169', backgroundColor: '#38a169', pointStyle: 'rectRot', pointRadius: 5, fill: false, tension: 0, spanGaps: true, showLine: false, borderDash: [5, 5], borderWidth: 1.5 },
                     { label: 'RR', data: emptyData(), borderColor: 'red', backgroundColor: 'red', pointStyle: 'star', pointRadius: 5, fill: false, tension: 0, spanGaps: true, showLine: false, borderDash: [5, 5], borderWidth: 1.5 },
                     { label: 'Temp', data: emptyData(), borderColor: '#d53f8c', backgroundColor: '#d53f8c', pointStyle: 'cross', pointRadius: 4, fill: false, tension: 0, spanGaps: true, showLine: false, borderDash: [5, 5], borderWidth: 1.5 },
+                    { label: 'CVP', data: emptyData(), borderColor: '#dd6b20', backgroundColor: '#dd6b20', pointStyle: 'rectRounded', pointRadius: 5, fill: false, tension: 0, spanGaps: true, showLine: false, borderDash: [5, 5], borderWidth: 1.5 },
                     // Bolus Dataset
                     { 
                         label: 'Bolus', 
@@ -784,7 +789,7 @@ function initCharts() {
                 id: 'customDataLabels',
                 afterDatasetsDraw(chart, args, pluginOptions) {
                     const ctx = chart.ctx;
-                    const meta = chart.getDatasetMeta(8); // 第 9 個 dataset (Bolus)
+                    const meta = chart.getDatasetMeta(9); // 第 10 個 dataset (Bolus)
                     if (!meta.hidden && chart.data.bolusNames) {
                         meta.data.forEach((element, index) => {
                             const name = chart.data.bolusNames[index];
@@ -822,7 +827,7 @@ function initCharts() {
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                if(context.datasetIndex === 8) {
+                                if(context.datasetIndex === 9) {
                                     return 'Bolus: ' + context.chart.data.bolusNames[context.dataIndex];
                                 }
                                 let val = context.raw;
@@ -863,7 +868,7 @@ function initCharts() {
     }
 }
 
-let lineVisibility = [false, false, false, false, false, false, false, false];
+let lineVisibility = [false, false, false, false, false, false, false, false, false];
 function toggleLine(dsIndex, btn) {
     lineVisibility[dsIndex] = !lineVisibility[dsIndex];
     if(lineVisibility[dsIndex]) btn.classList.add('active'); else btn.classList.remove('active');
@@ -1000,6 +1005,7 @@ function addRecord() {
     updateText(`row-rr-${targetGlobalSlot}`, 'rr');
     
     updateText(`row-pulse-${targetGlobalSlot}`, 'pulse');
+    updateText(`row-cvp-${targetGlobalSlot}`, 'cvp');
     updateText(`row-sysbp-${targetGlobalSlot}`, 'sysBP');
     updateText(`row-diabp-${targetGlobalSlot}`, 'diaBP');
     updateText(`row-meanbp-${targetGlobalSlot}`, 'meanBP');
@@ -1070,9 +1076,10 @@ function addRecord() {
     currentChart.data.datasets[5].data[localSlot] = mapY(parseChartVal(`row-etco2-${targetGlobalSlot}`));
     currentChart.data.datasets[6].data[localSlot] = mapY(parseChartVal(`row-rr-${targetGlobalSlot}`));
     currentChart.data.datasets[7].data[localSlot] = mapY(parseChartVal(`row-temp-${targetGlobalSlot}`));
+    currentChart.data.datasets[8].data[localSlot] = mapY(parseChartVal(`row-cvp-${targetGlobalSlot}`));
     
     if (bolusNameOnlyArray.length > 0) {
-        currentChart.data.datasets[8].data[localSlot] = mapY(280); 
+        currentChart.data.datasets[9].data[localSlot] = mapY(280); 
         if (isOverwrite && currentChart.data.bolusNames[localSlot]) {
              currentChart.data.bolusNames[localSlot] += ', ' + bolusNameOnlyArray.join(', ');
         } else {
@@ -1104,6 +1111,7 @@ function addRecord() {
     document.getElementById('tv').value = '';
     document.getElementById('rr').value = '';
     document.getElementById('pulse').value = '';
+    document.getElementById('cvp').value = '';
     document.getElementById('sysBP').value = '';
     document.getElementById('diaBP').value = '';
     document.getElementById('meanBP').value = '';
@@ -1294,7 +1302,7 @@ function exportCSV() {
     }
 
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    let headers = ["Time", "Anesthetic", "O2 L/min", "SpO2 (%)", "ETCO2 (mmHg)", "Peak (cmH2O)", "TV (ml)", "RR (bpm)", "Pulse (bpm)", "Sys BP (mmHg)", "Dia BP (mmHg)", "Mean BP (mmHg)", "Fluids", "Temp (°C)", "CRI"];
+    let headers = ["Time", "Anesthetic", "O2 L/min", "SpO2 (%)", "ETCO2 (mmHg)", "Peak (cmH2O)", "TV (ml)", "RR (bpm)", "Pulse (bpm)", "CVP (mmHg)", "Sys BP (mmHg)", "Dia BP (mmHg)", "Mean BP (mmHg)", "Fluids", "Temp (°C)", "CRI"];
     csvContent += headers.join(",") + "\n";
 
     for(let i = 0; i < currentGlobalSlot; i++) {
@@ -1308,6 +1316,7 @@ function exportCSV() {
             document.getElementById(`row-tv-${i}`).textContent,
             document.getElementById(`row-rr-${i}`).textContent,
             document.getElementById(`row-pulse-${i}`).textContent,
+            document.getElementById(`row-cvp-${i}`).textContent,
             document.getElementById(`row-sysbp-${i}`).textContent,
             document.getElementById(`row-diabp-${i}`).textContent,
             document.getElementById(`row-meanbp-${i}`).textContent,
@@ -1423,6 +1432,7 @@ function loadFromJSON(event) {
                         case 'etco2': dsIndex = 5; break;
                         case 'rr': dsIndex = 6; break;
                         case 'temp': dsIndex = 7; break;
+                        case 'cvp': dsIndex = 8; break;
                     }
                     if (dsIndex !== -1 && currentChart) {
                         currentChart.data.datasets[dsIndex].data[localSlot] = mapY(num);
@@ -1444,7 +1454,7 @@ function loadFromJSON(event) {
                 if (state[`chartBolusNames-${i}`] && charts[i-1]) {
                     charts[i-1].data.bolusNames = state[`chartBolusNames-${i}`];
                     state[`chartBolusNames-${i}`].forEach((name, idx) => {
-                        if (name) charts[i-1].data.datasets[8].data[idx] = mapY(280);
+                        if (name) charts[i-1].data.datasets[9].data[idx] = mapY(280);
                     });
                 }
             }
