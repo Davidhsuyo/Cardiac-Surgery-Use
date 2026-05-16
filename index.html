@@ -492,7 +492,7 @@
                             <thead>
                                 <tr>
                                     <th style="width: 18%;">藥物 (CRI)</th>
-                                    <th style="width: 8%;">原液濃度<br>(mg/mL)</th>
+                                    <th style="width: 8%;">原液濃度<br>(mg/mL | IU/mL)</th>
                                     <th style="width: 7%;">體重<br>(kg)</th>
                                     <th style="width: 8%;">袋子體積<br>(mL)</th>
                                     <th style="width: 8%;">1 mL/hr<br>= N</th>
@@ -593,11 +593,20 @@ const drugDB = {
     "Meloxicam": { conc: 5, dose: 0.2, unit: "mg/kg", ref: "參考: 0.2 mg/kg" },
     "Carprofen": { conc: 50, dose: 4, unit: "mg/kg", ref: "參考: 4 mg/kg" },
     "Cefazolin": { conc: 100, dose: 22, unit: "mg/kg", ref: "參考: 22 mg/kg IV" },
+    // 原始 CRI 藥物
     "Fentanyl CRI": { conc: 0.05, n: 1, unit: "mcg/kg/hr", ref: "通常 3–5 mcg/kg/hr" },
     "Dopamine CRI": { conc: 40, n: 1, unit: "mcg/kg/min", ref: "2–10 mcg/kg/min" },
     "Dobutamine CRI": { conc: 12.5, n: 1, unit: "mcg/kg/min", ref: "2.5–10 mcg/kg/min" },
     "Norepinephrine CRI": { conc: 1, n: 1, unit: "mcg/kg/min", ref: "0.05–0.3 mcg/kg/min" },
-    "MLK (Morphine)": { conc: 10, n: 1, unit: "mg/kg/hr", ref: "M:0.1/L:1/K:0.2 mg/kg/hr" }
+    "MLK (Morphine)": { conc: 10, n: 1, unit: "mg/kg/hr", ref: "M:0.1/L:1/K:0.2 mg/kg/hr" },
+    // 新增 CRI 藥物
+    "Hanp CRI": { conc: 0.2, n: 0.05, unit: "mcg/kg/hr", ref: "200 mcg/ml (已自帶換算)" },
+    "TXA CRI": { conc: 50, n: 15, unit: "mg/kg/hr", ref: "50 mg/ml" },
+    "Propofol CRI": { conc: 10, n: 12, unit: "mg/kg/hr", ref: "10 mg/ml" },
+    "Remifentanil CRI": { conc: 1, n: 20, unit: "mcg/kg/hr", ref: "1 mg/ml" },
+    "Vasopressin CRI": { conc: 20, n: 0.05, unit: "IU/kg/hr", ref: "20 IU/ml" },
+    "Elaspol CRI": { conc: 1, n: '', unit: "mg/kg/hr", ref: "請輸入數值" },
+    "Protamine CRI": { conc: 10, n: '', unit: "mg/kg/hr", ref: "10 mg/ml" }
 };
 
 const regularOptionsHTML = `
@@ -650,6 +659,15 @@ const criOptionsHTML = `
     <option value="Dobutamine CRI">Dobutamine CRI</option>
     <option value="Norepinephrine CRI">Norepinephrine CRI</option>
     <option value="MLK (Morphine)">MLK (Morphine)</option>
+    <optgroup label="【新增清單】">
+        <option value="Hanp CRI">Hanp CRI</option>
+        <option value="TXA CRI">TXA CRI</option>
+        <option value="Propofol CRI">Propofol CRI</option>
+        <option value="Remifentanil CRI">Remifentanil CRI</option>
+        <option value="Vasopressin CRI">Vasopressin CRI</option>
+        <option value="Elaspol CRI">Elaspol CRI</option>
+        <option value="Protamine CRI">Protamine CRI</option>
+    </optgroup>
     <option value="CUSTOM">+ 自訂 CRI (Custom)</option>
 `;
 
@@ -1430,6 +1448,7 @@ function addCRIToSection(selectElem) {
                 <option value="mcg/kg/hr" ${info.unit==='mcg/kg/hr'?'selected':''}>mcg/kg/hr</option>
                 <option value="mcg/kg/min" ${info.unit==='mcg/kg/min'?'selected':''}>mcg/kg/min</option>
                 <option value="mg/kg/hr" ${info.unit==='mg/kg/hr'?'selected':''}>mg/kg/hr</option>
+                <option value="IU/kg/hr" ${info.unit==='IU/kg/hr'?'selected':''}>IU/kg/hr</option>
             </select>
         </td>
         <td><input type="number" placeholder="0"></td>
@@ -1462,15 +1481,18 @@ function calcCRI(elem) {
     if (unit === 'mcg/kg/hr') { cMix = (n * weight) / 1000; } 
     else if (unit === 'mcg/kg/min') { cMix = (60 * n * weight) / 1000; } 
     else if (unit === 'mg/kg/hr') { cMix = n * weight; }
+    else if (unit === 'IU/kg/hr') { cMix = n * weight; }
 
     const totalMgNeeded = cMix * bagVol;
     const drawVol = totalMgNeeded / conc;
     const diluentVol = bagVol - drawVol;
+    
+    let outUnit = unit.includes('IU') ? 'IU/mL' : 'mg/mL';
 
     resPanel.innerHTML = `
         <strong>抽藥：${drawVol.toFixed(2)} mL</strong>
         <span>稀釋液：${diluentVol.toFixed(2)} mL</span>
-        <span>混合後濃度：${cMix.toFixed(4)} mg/mL</span>
+        <span>混合後濃度：${cMix.toFixed(4)} ${outUnit}</span>
     `;
 }
 
